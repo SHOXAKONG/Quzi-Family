@@ -1,55 +1,59 @@
 from django.shortcuts import render, redirect
 from django.contrib import messages
-from .forms import FamilyQuizForm
+from .forms import QuizForm
 import requests
 from decouple import config
 
 BITRIX_BASE_URL = config("WEBHOOK_URL")
 
 
-def home(request):
-    return render(request, "home.html")
-
-
-def send_to_bitrix(quiz):
-    comments = f"""
-Тип дела: {quiz.get_case_type_display()}
-1. Опишите ситуацию: {quiz.question_1}
-2. Обращались ли к юристу: {quiz.question_2}
-3. Когда возникла проблема: {quiz.question_3}
-4. Дополнительно: {quiz.question_4}
-"""
+def send_to_bitrix(title, name, phone, details, consultation_method):
     payload = {
         "fields": {
-            "TITLE": f"Заявка ({quiz.get_case_type_display()})",
-            "NAME": quiz.full_name,
-            "PHONE": [{"VALUE": quiz.phone, "VALUE_TYPE": "WORK"}],
-            "EMAIL": [{"VALUE": quiz.email or '', "VALUE_TYPE": "WORK"}],
-            "COMMENTS": comments,
+            "TITLE": title,
+            "NAME": name,
+            "PHONE": [{"VALUE": phone, "VALUE_TYPE": "WORK"}],
+            "COMMENTS": f"{details}\nСпособ консультации: {consultation_method}",
         }
     }
     try:
-        r = requests.post(f"{BITRIX_BASE_URL}crm.lead.add.json", json=payload, timeout=10)
-        print("Bitrix response:", r.json())
+        response = requests.post(f"{BITRIX_BASE_URL}crm.lead.add.json", json=payload, timeout=10)
+        print("Bitrix response:", response.json())
     except Exception as e:
         print("Ошибка Bitrix24:", e)
 
 
-def quiz_view(request, form_class, title):
-    if request.method == "POST":
-        form = form_class(request.POST)
-        if form.is_valid():
-            quiz = form.save()
-            send_to_bitrix(quiz)
-            messages.success(request, "Спасибо! Мы скоро с вами свяжемся.")
-            return redirect("quiz-success")
-    else:
-        form = form_class()
-    return render(request, "index.html", {"form": form, "title": title})
+def home(request):
+    return render(request, "home.html")
 
 
 def family_quiz(request):
-    return quiz_view(request, FamilyQuizForm, "Семейные дела")
+    if request.method == "POST":
+        form = QuizForm(request.POST)
+        if form.is_valid():
+            quiz = form.save()
+
+            # Отправляем в Bitrix24
+            send_to_bitrix(
+                title=f"Заявка ({quiz.get_case_type_display()})",
+                name=quiz.full_name,
+                phone=quiz.phone,
+                details=f"""
+Тип дела: {quiz.get_case_type_display()}
+1. Опишите ситуацию: {quiz.question_1}
+2. Обращались ли к юристу: {quiz.question_2}
+3. Когда возникла проблема: {quiz.question_3}
+4. Какие-либо действия самостоятельно предпринимали?: {quiz.question_4}
+""",
+                consultation_method=quiz.get_consultation_method_display(),
+            )
+
+            messages.success(request, "Спасибо! Мы скоро с вами свяжемся.")
+            return redirect("quiz-success")
+    else:
+        form = QuizForm()
+
+    return render(request, "index.html", {"form": form, "title": "Семейные дела"})
 
 
 def quiz_success(request):
