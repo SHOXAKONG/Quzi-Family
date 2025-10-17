@@ -38,13 +38,7 @@ def family_quiz(request):
                 title=f"Заявка ({quiz.get_case_type_display()})",
                 name=quiz.full_name,
                 phone=quiz.phone,
-                details=f"""
-Тип дела: {quiz.get_case_type_display()}
-1. Опишите ситуацию: {quiz.question_1}
-2. Обращались ли к юристу: {quiz.question_2}
-3. Когда возникла проблема: {quiz.question_3}
-4. Какие-либо действия самостоятельно предпринимали?: {quiz.question_4}
-""",
+                details=f"Тип дела: {quiz.get_case_type_display()}\nОписание: {quiz.details}",
                 consultation_method=quiz.get_consultation_method_display(),
             )
 
